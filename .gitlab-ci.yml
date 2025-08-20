@@ -1,16 +1,58 @@
-build:
-  image: node:22
-  script:
-    - npm install
-    - npm run lint
-    - npm run format:check
-    - npm run test
-    - npm run build
+image: node:22
 
+install:
+  stage: build
+  script: npm install
+  artifacts:
+    paths:
+      - node_modules
+  cache:
+    paths:
+      - node_modules
+
+lint:
+  stage: test
+  script: npm run lint
+  needs:
+    - install
+
+format:
+  stage: test
+  script: npm run format:check
+  needs:
+    - install
+
+test:
+  stage: test
+  script: npm run test
+  needs:
+    - install
+
+build:
+  stage: deploy
+  script: npm run build
+  needs:
+    - install
+    - lint
+    - format
+    - test
   artifacts:
     paths:
       - dist/
 
-  cache:
-    paths:
-      - node_modules
+deploy:
+  stage: deploy
+  image: gitlab.webvariance.de:5000/mantiz/docker-images/lftp:latest-alpine
+  when: manual
+  script:
+    - |
+      lftp <<-EOF
+      set sftp:auto-confirm yes
+      set ftp:passive-mode yes
+      open -u ${FTP_USERNAME},${FTP_PASSWORD} ftp://suora.christian-hammerl.de:49021
+      mirror -c -e -R -L dist/ /htdocs
+      bye
+      EOF
+
+  needs:
+    - build
